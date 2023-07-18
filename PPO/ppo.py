@@ -248,7 +248,7 @@ class PPO():
         batch_states = tf.reshape(batch_states, (self.mini_batch_size * self.n_envs, self.state_shape))
         values = self.critic_model(batch_states, training=True)
         values = tf.reshape(values, (self.mini_batch_size, self.n_envs))
-        critic_loss = 0.5 * tf.reduce_mean(tf.square(values - batch_returns), axis=0)
+        critic_loss = tf.reduce_mean(tf.square(values - batch_returns), axis=0)
         critic_loss = tf.reduce_mean(critic_loss)
 
         return critic_loss
