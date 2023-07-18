@@ -17,7 +17,6 @@ class PPO():
 
     def __init__(self, 
             envs: gym.vector.VectorEnv, 
-            n_envs: int, 
             actor_lr: float,
             critic_lr: float, 
             gamma: float,
@@ -30,7 +29,8 @@ class PPO():
             mini_batch_size: int
             ) -> None:
 
-        self.n_envs = n_envs
+        self.envs = envs
+        self.n_envs = envs.num_envs
         self.state_shape = obs_shape = envs.single_observation_space.shape[0]
         self.n_actions = envs.single_action_space.n
 
@@ -253,134 +253,102 @@ class PPO():
 
         return critic_loss
 
+    def plot(self, global_rewards: np.array, actor_losses: np.array, entropies: np.array, critic_losses: np.array):
+        print('Actor\tCritic\tEntropy')
+        print('#########################################################')
+        for a, c, e in zip(actor_losses, critic_losses, entropies):
+            print(f'{a}\t{c}\t{e}')
+        print('#########################################################')
+
+        fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(12, 5))
+        fig.suptitle(f"Training plots for {agent.__class__.__name__} in the LunarLander-v2 environment\n \
+                (n_envs = {n_envs}, num_steps = {num_steps}, randomize_domain = {randomize_domain})")
+
+        # episode return
+        axs[0][0].set_title("Episode Returns")
+        axs[0][0].plot(global_rewards)
+        axs[0][0].set_xlabel("Number of episodes")
+
+        # actor_loss
+        axs[0][1].set_title("Actor Loss")
+        axs[0][1].plot(actor_losses)
+        axs[0][1].set_xlabel("Number of updates")
+
+        # entropy
+        axs[1][0].set_title("Entropy")
+        axs[1][0].plot(entropies)
+        axs[1][0].set_xlabel("Number of updates")
+
+        # critic_loss
+        axs[1][1].set_title("Critic Loss")
+        axs[1][1].plot(critic_losses)
+        axs[1][0].set_xlabel("Number of updates")
+
+        plt.tight_layout()
+        plt.show()
+
+
+
+    def play(self, play_envs: list(gym.Env)):
+        for play_env in play_envs:
+
+            ep_reward = 0
+            state, info = play_env.reset()
+            while True:
+                state = np.expand_dims(state, axis=0)
+                _, _, action = self.sample_actions(state)
+                action = np.squeeze(action.numpy(), axis=0)
+                state, reward, term, trunc, _ = play_env.step(action)
+                play_env.render()
+                ep_reward += reward
+
+                if term or trunc:
+                    print(ep_reward)
+                    break
+
+
+
+def get_env(render=False) -> gym.Env:
+    return gym.make(
+            "LunarLander-v2",
+            gravity=np.clip(
+                np.random.normal(loc=-10.0, scale=1.0), a_min=-11.99, a_max=-0.01
+            ),
+            enable_wind=np.random.choice([True, False]),
+            wind_power=np.clip(
+                np.random.normal(loc=15.0, scale=1.0), a_min=0.01, a_max=19.99
+            ),
+            turbulence_power=np.clip(
+                np.random.normal(loc=1.5, scale=0.5), a_min=0.01, a_max=1.99
+            ),
+            max_episode_steps=600,
+            autoreset=True,
+            render_mode='human' if render else 'rgb_array'
+        )
+
+
 
 # hyperparams
-n_envs = 64
-ppo_epochs = 32
-num_epochs = 64
-num_steps = 1024 
-mini_batch_size = 64
+n_envs = 32
+envs = gym.vector.AsyncVectorEnv([ lambda: get_env() for _ in range(n_envs) ])
+play_envs = [get_env(render=True) for _ in range(n_envs)])
 
-randomize_domain = True 
-
-if randomize_domain:
-    envs = gym.vector.AsyncVectorEnv(
-        [
-            lambda: gym.make(
-                "LunarLander-v2",
-                gravity=np.clip(
-                    np.random.normal(loc=-10.0, scale=1.0), a_min=-11.99, a_max=-0.01
-                ),
-                enable_wind=np.random.choice([True, False]),
-                wind_power=np.clip(
-                    np.random.normal(loc=15.0, scale=1.0), a_min=0.01, a_max=19.99
-                ),
-                turbulence_power=np.clip(
-                    np.random.normal(loc=1.5, scale=0.5), a_min=0.01, a_max=1.99
-                ),
-                max_episode_steps=600,
-            )
-            for i in range(n_envs)
-        ]
-    )
-else:
-    envs = gym.vector.make("LunarLander-v2", num_envs=n_envs, max_episode_steps=600)
-
-# init the agent
 agent = PPO(
         envs=envs, 
-        n_envs=n_envs, 
         actor_lr=2.5e-4, 
         critic_lr=7.5e-4, 
         gamma=0.999, 
         lam=0.95, 
         ent_coef=0.01, 
         clip_ratio=0.2, 
-        ppo_epochs=ppo_epochs, 
-        num_epochs=num_epochs, 
-        num_steps=num_steps, 
-        mini_batch_size=mini_batch_size)
+        ppo_epochs=32, 
+        num_epochs=64, 
+        num_steps=1024, 
+        mini_batch_size=128)
 
 actor_losses, entropies, critic_losses, global_rewards = agent.train()
 
+agent.play(play_envs)
+
 envs.close()
-
-print('Actor\tCritic\tEntropy')
-print('#########################################################')
-for a, c, e in zip(actor_losses, critic_losses, entropies):
-    print(f'{a}\t{c}\t{e}')
-print('#########################################################')
-
-""" plot results """
-# %matplotlib inline
-rolling_length = 20
-fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(12, 5))
-fig.suptitle(f"Training plots for {agent.__class__.__name__} in the LunarLander-v2 environment\n \
-        (n_envs = {n_envs}, num_steps = {num_steps}, randomize_domain = {randomize_domain})")
-
-# episode return
-axs[0][0].set_title("Episode Returns")
-# episode_returns_moving_average = (np.convolve(np.array(agent.envs_wrapper.return_queue).flatten(), np.ones(rolling_length), mode="valid") / rolling_length)
-axs[0][0].plot(global_rewards)
-# axs[0][0].plot(np.arange(len(episode_returns_moving_average)) / n_envs, episode_returns_moving_average)
-axs[0][0].set_xlabel("Number of episodes")
-
-# entropy
-axs[1][0].set_title("Entropy")
-# entropy_moving_average = (np.convolve(np.array(entropies), np.ones(rolling_length), mode="valid") / rolling_length)
-axs[1][0].plot(entropies)
-# axs[1][0].plot(entropy_moving_average)
-axs[1][0].set_xlabel("Number of updates")
-
-# critic_loss
-axs[0][1].set_title("Critic Loss")
-# critic_losses_moving_average = (np.convolve(np.array(critic_losses).flatten(), np.ones(rolling_length), mode="valid") / rolling_length)
-axs[0][1].plot(critic_losses)
-# axs[0][1].plot(critic_losses_moving_average)
-axs[0][1].set_xlabel("Number of updates")
-
-# actor_loss
-axs[1][1].set_title("Actor Loss")
-# actor_losses_moving_average = (np.convolve(np.array(actor_losses).flatten(), np.ones(rolling_length), mode="valid") / rolling_length)
-axs[1][1].plot(actor_losses)
-# axs[1][1].plot(actor_losses_moving_average)
-axs[1][1].set_xlabel("Number of updates")
-
-plt.tight_layout()
-plt.show()
-
-for _ in range(25):
-    play_env = gym.make(
-               "LunarLander-v2",
-                gravity=np.clip(
-                    np.random.normal(loc=-10.0, scale=1.0), a_min=-11.99, a_max=-0.01
-                ),
-                enable_wind=np.random.choice([True, False]),
-                wind_power=np.clip(
-                    np.random.normal(loc=15.0, scale=1.0), a_min=0.01, a_max=19.99
-                ),
-                turbulence_power=np.clip(
-                    np.random.normal(loc=1.5, scale=0.5), a_min=0.01, a_max=1.99
-                ),
-                max_episode_steps=600,
-                render_mode='human',
-            )
-
-    ep_reward = 0
-    state, info = play_env.reset()
-    while True:
-        state = np.expand_dims(state, axis=0)
-        probs = agent.actor_model(state)
-        action_pd = tfp.distributions.Categorical(probs=probs)
-        actions = action_pd.sample()
-
-        action = actions[0]
-        state, reward, terminated, truncated, info = play_env.step(action.numpy())
-        ep_reward += reward
-        # play_env.render()
-
-        if terminated or truncated:
-            print(ep_reward)
-            break
-
-play_env.close()
+env.close() for env in envs 
