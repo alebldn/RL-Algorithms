@@ -307,31 +307,48 @@ class PPO():
                     break
 
 
+# As bad as it looks, using the "render_mode='human' if play else 'rgb_array' trick makes every step of the training last way longer
+def get_env(play=False) -> gym.Env:
+    if play:
+            return gym.make(
+                "LunarLander-v2",
+                gravity=np.clip(
+                    np.random.normal(loc=-10.0, scale=1.0), a_min=-11.99, a_max=-0.01
+                ),
+                enable_wind=np.random.choice([True, False]),
+                wind_power=np.clip(
+                    np.random.normal(loc=15.0, scale=1.0), a_min=0.01, a_max=19.99
+                ),
+                turbulence_power=np.clip(
+                    np.random.normal(loc=1.5, scale=0.5), a_min=0.01, a_max=1.99
+                ),
+                max_episode_steps=600,
+                autoreset=True,
+                render_mode='human'
+            )
 
-def get_env(render=False) -> gym.Env:
     return gym.make(
-            "LunarLander-v2",
-            gravity=np.clip(
-                np.random.normal(loc=-10.0, scale=1.0), a_min=-11.99, a_max=-0.01
-            ),
-            enable_wind=np.random.choice([True, False]),
-            wind_power=np.clip(
-                np.random.normal(loc=15.0, scale=1.0), a_min=0.01, a_max=19.99
-            ),
-            turbulence_power=np.clip(
-                np.random.normal(loc=1.5, scale=0.5), a_min=0.01, a_max=1.99
-            ),
-            max_episode_steps=600,
-            autoreset=True,
-            render_mode='human' if render else 'rgb_array'
-        )
+        "LunarLander-v2",
+        gravity=np.clip(
+            np.random.normal(loc=-10.0, scale=1.0), a_min=-11.99, a_max=-0.01
+        ),
+        enable_wind=np.random.choice([True, False]),
+        wind_power=np.clip(
+            np.random.normal(loc=15.0, scale=1.0), a_min=0.01, a_max=19.99
+        ),
+        turbulence_power=np.clip(
+            np.random.normal(loc=1.5, scale=0.5), a_min=0.01, a_max=1.99
+        ),
+        max_episode_steps=600,
+        autoreset=True,
+    )
 
 
 
 # hyperparams
 n_envs = 32
 envs = gym.vector.AsyncVectorEnv([ lambda: get_env() for _ in range(n_envs) ])
-play_envs = [get_env(render=True) for _ in range(n_envs)])
+play_envs = [get_env(play=True) for _ in range(n_envs)]
 
 agent = PPO(
         envs=envs, 
@@ -351,4 +368,5 @@ actor_losses, entropies, critic_losses, global_rewards = agent.train()
 agent.play(play_envs)
 
 envs.close()
-env.close() for env in envs 
+for env in play_envs:
+    env.close()
