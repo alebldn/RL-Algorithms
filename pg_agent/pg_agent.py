@@ -12,12 +12,14 @@ class PGAgent():
             gamma: float,
             lam: float,
             ent_coef: float,
+            num_epochs: int,
             num_steps: int,
             ) -> None:
 
         self.gamma = gamma
         self.lam = lam
         self.ent_coef = ent_coef
+        self.num_epochs = num_epochs
         self.num_steps = num_steps
 
 
@@ -52,6 +54,8 @@ class PGAgent():
 
             # Gather experience
             states, probs, values, actions, rewards, masks = self.rollout(last_states)
+            last_states = states[-1]
+            states = states[:-1]
             
             # Compute advantages and returns
             advantages, returns = self.compute_advantages(values, rewards, masks)
@@ -93,7 +97,7 @@ class PGAgent():
 
     @tf.function
     def sample_actions(self, states: tf.Tensor) -> [tf.Tensor, tf.Tensor, tf.Tensor]:
-
+        
         probs = self.actor_model(states)
         values = tf.squeeze(self.critic_model(states), axis=-1) # Squeeze it because the resulting shape is [n_envs, 1]
         action_pd = tfp.distributions.Categorical(probs=probs)
@@ -129,7 +133,7 @@ class PGAgent():
     def perform_update(self, batch_states: tf.Tensor, batch_probs: tf.Tensor, batch_actions: tf.Tensor, batch_advantages: tf.Tensor, batch_returns: tf.Tensor) -> [tf.Tensor, tf.Tensor, tf.Tensor]:
         with tf.GradientTape(watch_accessed_variables=False) as actor_tape:
             actor_tape.watch(self.actor_model.trainable_variables)
-            actor_loss, entropy = self.actor_loss(batch_states, batch_probs, batch_advantages, batch_actions)
+            actor_loss, entropy = self.actor_loss(batch_states, batch_probs, batch_actions, batch_advantages)
             total_loss = actor_loss - entropy
 
         actor_grads = actor_tape.gradient(total_loss, self.actor_model.trainable_variables)

@@ -1,4 +1,4 @@
-from ppo import PPO
+from a2c import A2C
 import numpy as np
 import gymnasium as gym
 
@@ -45,15 +45,12 @@ envs = gym.vector.AsyncVectorEnv([ lambda: get_env() for _ in range(n_envs) ])
 # envs = gym.wrappers.RecordEpisodeStatistics(envs, deque_size=self.n_envs * self.num_epochs)
 play_envs = [get_env(play=True) for _ in range(16)]
 
-agent = PPO(
+agent = A2C(
         gamma=0.999, 
         lam=0.95, 
         ent_coef=0.01, 
-        num_steps=1024, 
-        num_epochs=64, 
-        clip_ratio=0.2, 
-        ppo_epochs=32, 
-        mini_batch_size=128)
+        num_epochs=4096,
+        num_steps=64)
 
 agent.set_vector_env(envs) 
 agent.set_models(actor_lr=2.5e-4, critic_lr=7.5e-4)

@@ -16,18 +16,17 @@ class PPO(PGAgent):
             gamma: float,
             lam: float,
             ent_coef: float,
+            num_epochs: int,
             num_steps: int,
             clip_ratio: float,
             ppo_epochs: int,
-            num_epochs: int,
             mini_batch_size: int
             ) -> None:
 
-        super().__init__(gamma, lam, ent_coef, num_steps)
+        super().__init__(gamma, lam, ent_coef, num_epochs, num_steps)
 
         self.clip_ratio = clip_ratio
         self.ppo_epochs = ppo_epochs
-        self.num_epochs = num_epochs
         self.mini_batch_size = mini_batch_size
 
 
@@ -57,7 +56,7 @@ class PPO(PGAgent):
         return np.mean(epoch_actor_losses), np.mean(epoch_entropies), np.mean(epoch_critic_losses)
 
     @tf.function
-    def actor_loss(self, batch_states: tf.Tensor, batch_old_probs: tf.Tensor, batch_advantages: tf.Tensor, batch_actions: tf.Tensor) -> [tf.Tensor, tf.Tensor]:
+    def actor_loss(self, batch_states: tf.Tensor, batch_old_probs: tf.Tensor, batch_actions: tf.Tensor, batch_advantages: tf.Tensor) -> [tf.Tensor, tf.Tensor]:
         # batch_states with shape [mini_batch_size, n_envs, n_states]
         # batch_old_probs with shape [mini_batch_size, n_envs, n_actions]       
         # batch_advantages with shape [mini_batch_size, n_envs]
@@ -85,6 +84,8 @@ class PPO(PGAgent):
         # Convert it to log for ratio computation and clip it 
         ratio = batch_probs / batch_old_probs
         clipped_ratio = tf.clip_by_value(ratio, 1.0-self.clip_ratio, 1.0+self.clip_ratio)
+        print(f'ratio: {ratio}')
+        print(f'adv: {batch_advantages}')
         
         # Get the minimum advantage between ratio and clipped_ratio
         min_batch_advantage = tf.minimum(ratio * batch_advantages, clipped_ratio * batch_advantages)
