@@ -14,6 +14,9 @@ Actor-Critic Policy gradient agent.
 """
 class A2C(PGAgent):
     
+    """
+    Inputs same as pg_agent.
+    """
     def __init__(self, 
             gamma: float,
             lam: float,
@@ -25,6 +28,20 @@ class A2C(PGAgent):
         super().__init__(gamma, lam, ent_coef, num_epochs, num_steps)
 
 
+    """
+    train_step:
+    This function is used to generalize the preprocessing of perform_update by only giving it the required batches. In a2c this is only a wrapper to properly convert numpy array to tensorflow tensors.
+    Input:
+        - batch_states:     States explored.                                                                    Shape: [num_steps, n_envs, [state_shape]]
+        - batch_probs:      Old probabilities gathered from rollout.                                            Shape: [num_steps, n_envs, n_actions]]
+        - batch_actions:    Actions performed.                                                                  Shape: [num_steps, n_envs]
+        - batch_advantages: Advantages computed via Generalized Advantage Estimation.                           Shape: [num_steps, n_envs]
+        - batch_returns:    Returns computed via Generalized Advantage Estimation.                              Shape: [num_steps, n_envs]
+    Output:
+        - ep_actor_loss:    Mean of the actor loss computed in this train step.
+        - ep_entropies:     Mean of the entropies computed in this train step.
+        - ep_critic_loss:   Mean of the critic losses computed in this train step.
+    """
     def train_step(self, batch_states: np.array, batch_probs: np.array, batch_actions: np.array, batch_advantages: np.array, batch_returns: np.array) -> [np.array, np.array, np.array]:
         epoch_actor_losses, epoch_entropies, epoch_critic_losses = [], [], []
 
@@ -42,6 +59,19 @@ class A2C(PGAgent):
 
         return np.mean(epoch_actor_losses), np.mean(epoch_entropies), np.mean(epoch_critic_losses)
 
+
+    """ 
+    actor_loss: 
+    Compute the actor loss.
+    Input:
+        - batch_states:     States explored.
+        - batch_old_probs:  Probabilities gathered during rollout (useless here, just for compatibility).
+        - batch_actions:    Actions performed. 
+        - batch_advantages: Advantages computed via Generalized Advantage Estimation.
+    Output:
+        - actor_loss:       Actor loss computed.
+        - entropy:          Entropy computed.
+    """
     @tf.function
     def actor_loss(self, batch_states: tf.Tensor, batch_old_probs: tf.Tensor, batch_actions: tf.Tensor, batch_advantages: tf.Tensor) -> [tf.Tensor, tf.Tensor]:
 
@@ -61,6 +91,16 @@ class A2C(PGAgent):
 
         return actor_loss, entropy
 
+
+    """
+    critic_loss:
+    Compute the critic loss.
+    Input:
+        - batch_states:     States explored.
+        - batch_returns:    Expected returns computed via Generalized Advantage Estimation.
+    Output:
+        - critic_loss:      Critic loss computed.
+    """
     @tf.function
     def critic_loss(self, batch_states: tf.Tensor, batch_returns: tf.Tensor) -> tf.Tensor:
         batch_states = tf.reshape(batch_states, (self.num_steps * self.n_envs, self.state_shape))

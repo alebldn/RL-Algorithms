@@ -9,9 +9,17 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 import gymnasium as gym
 
-
+"""
+Proximal Policy Optimization
+""" 
 class PPO(PGAgent):
 
+    """
+    Inputs same as pg_gradient, with the addition of:
+        - clip_ratio:       Clipping parameter necessary to compute the actor loss in ppo.
+        - ppo_epochs:       Number of successive ppo updates using random batches for each update.
+        - mini_batch_size:  Size of the mini batch in which each parameter of actor loss is split into.
+    """
     def __init__(self, 
             gamma: float,
             lam: float,
@@ -30,6 +38,20 @@ class PPO(PGAgent):
         self.mini_batch_size = mini_batch_size
 
 
+    """
+    train_step:
+    This function is used to generalize the preprocessing of perform_update by only giving it the required batches. In a2c this is only a wrapper to properly convert numpy array to tensorflow tensors.
+    Input:
+        - batch_states:     States explored.                                                                    Shape: [num_steps, n_envs, [state_shape]]
+        - batch_probs:      Old probabilities gathered from rollout.                                            Shape: [num_steps, n_envs, n_actions]]
+        - batch_actions:    Actions performed.                                                                  Shape: [num_steps, n_envs]
+        - batch_advantages: Advantages computed via Generalized Advantage Estimation.                           Shape: [num_steps, n_envs]
+        - batch_returns:    Returns computed via Generalized Advantage Estimation.                              Shape: [num_steps, n_envs]
+    Output:
+        - ep_actor_loss:    Mean of the actor loss computed in this train step.
+        - ep_entropies:     Mean of the entropies computed in this train step.
+        - ep_critic_loss:   Mean of the critic losses computed in this train step.
+    """
     def train_step(self, states: np.array, probs: np.array, actions: np.array, advantages: np.array, returns: np.array) -> [np.array, np.array, np.array]:
 
         epoch_actor_losses, epoch_entropies, epoch_critic_losses = [], [], [] 
@@ -55,6 +77,19 @@ class PPO(PGAgent):
 
         return np.mean(epoch_actor_losses), np.mean(epoch_entropies), np.mean(epoch_critic_losses)
 
+
+    """
+    actor_loss:
+    Compute the actor loss.
+    Input:
+        - batch_states:     States explored.
+        - batch_old_probs:  Probabilities gathered during rollout (useless here, just for compatibility).
+        - batch_actions:    Actions performed.
+        - batch_advantages: Advantages computed via Generalized Advantage Estimation.
+    Output:
+        - actor_loss:       Actor loss computed.
+        - entropy:          Entropy computed.
+    """
     @tf.function
     def actor_loss(self, batch_states: tf.Tensor, batch_old_probs: tf.Tensor, batch_actions: tf.Tensor, batch_advantages: tf.Tensor) -> [tf.Tensor, tf.Tensor]:
         # batch_states with shape [mini_batch_size, n_envs, n_states]
@@ -84,13 +119,11 @@ class PPO(PGAgent):
         # Convert it to log for ratio computation and clip it 
         ratio = batch_probs / batch_old_probs
         clipped_ratio = tf.clip_by_value(ratio, 1.0-self.clip_ratio, 1.0+self.clip_ratio)
-        print(f'ratio: {ratio}')
-        print(f'adv: {batch_advantages}')
         
         # Get the minimum advantage between ratio and clipped_ratio
         min_batch_advantage = tf.minimum(ratio * batch_advantages, clipped_ratio * batch_advantages)
         # From https://keras.io/examples/rl/ppo_cartpole
-        # min_batch_advantage = tf.where(batch_advantage > 0, (1+self.clip_ratio, 1-self.clip_ratio 
+        # min_batch_advantage = tf.where(batch_advantage > 0, (1+self.clip_ratio, 1-self.clip_ratio) # ?!?
         
         # Compute loss 
         actor_loss = - tf.reduce_mean(min_batch_advantage, axis=0)
@@ -102,6 +135,16 @@ class PPO(PGAgent):
 
         return actor_loss, entropy
 
+    
+    """
+    critic_loss:
+    Compute the critic loss.
+    Input:
+        - batch_states:     States explored.
+        - batch_returns:    Expected returns computed via Generalized Advantage Estimation.
+    Output:
+        - critic_loss:      Critic loss computed.
+    """
     @tf.function
     def critic_loss(self, batch_states: tf.Tensor, batch_returns: tf.Tensor) -> tf.Tensor:
         batch_states = tf.reshape(batch_states, (self.mini_batch_size * self.n_envs, self.state_shape))
