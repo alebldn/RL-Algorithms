@@ -9,9 +9,11 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 import gymnasium as gym
 
-
+"""
+Actor-Critic Policy gradient agent.
+"""
 class A2C(PGAgent):
-
+    
     def __init__(self, 
             gamma: float,
             lam: float,
